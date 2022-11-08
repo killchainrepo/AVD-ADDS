@@ -1,0 +1,743 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "_artifactsLocation": {
+            "defaultValue": "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/",
+            "type": "String",
+            "metadata": {
+                "description": "The location where the required artifacts like configuration files, scripts are located."
+            }
+        },
+        "easyButtonLinkedTemplateLocation": {
+            "defaultValue": "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/armtemplates/EasyButton_01-20-2021/nestedTemplates/",
+            "type": "String",
+            "metadata": {
+                "description": "The location of the easy button linked templates."
+            }
+        },
+        "createHostpoolTemplateLocation": {
+            "defaultValue": "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/armtemplates/Hostpool_08-16-2022/CreateHostpoolTemplate.json",
+            "type": "String",
+            "metadata": {
+                "description": "CreateHostpool Template location."
+            }
+        },
+        "createHostpoolNestedTemplatesLocation": {
+            "defaultValue": "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/armtemplates/Hostpool_08-16-2022/nestedTemplates/",
+            "type": "String",
+            "metadata": {
+                "description": "The base URI where artifacts required by this template are located."
+            }
+        },
+        "deploymentRG": {
+            "type": "String",
+            "metadata": {
+                "description": "The resources required for easy button deployment will be created here. This resource group can be removed by the user once the easy button deployment completes."
+            }
+        },
+        "prerequisiteRG": {
+            "type": "String",
+            "metadata": {
+                "description": "The resources required for AVD like VNet, Subnet, Domain services, etc., will be created here."
+            }
+        },
+        "wvdResourcesRG": {
+            "type": "String",
+            "metadata": {
+                "description": "AVD objects like hostpool, session hosts, workspace, application group, etc., will be created here."
+            }
+        },
+        "location": {
+            "defaultValue": "[deployment().location]",
+            "type": "String",
+            "metadata": {
+                "description": "Region where the resources will be created."
+            }
+        },
+        "azureCloudEnvironment": {
+            "defaultValue": "AzureCloud",
+            "allowedValues": [
+                "AzureCloud",
+                "AzureUSGovernment",
+                "AzureChinaCloud"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Azure cloud environment."
+            }
+        },
+        "azureAdminUPN": {
+            "type": "String",
+            "metadata": {
+                "description": "Fully qualified Azure administrator account username. e.g., admin@mydomain.com. This is used for validating the input, as well as creating any required resources. "
+            }
+        },
+        "azureAdminPassword": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "Azure administrator account password. This is used for validating the input, and creating any required resources."
+            }
+        },
+        "identityApproach": {
+            "allowedValues": [
+                "Azure_AD_DS",
+                "AD_DS"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "The identity approach to be used for setting up AVD. 'Azure_AD_DS' should be used when using AAD DS; 'AD_DS' should be used when using Active Directory Domain services;"
+            }
+        },
+        "domainAdminUPN": {
+            "type": "String",
+            "metadata": {
+                "description": "Fully qualified domain administrator account username. E.g., domainadmin@mydomain.com"
+            }
+        },
+        "domainAdminPassword": {
+            "type": "SecureString",
+            "metadata": {
+                "description": "The password for domain administrator account."
+            }
+        },
+        "validationUserName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Fully qualified validation username that will be used for logging into Remote desktop. e.g tempuser@mydomain.com"
+            }
+        },
+        "validationUserPassword": {
+            "defaultValue": "",
+            "type": "SecureString",
+            "metadata": {
+                "description": "Validation user account password."
+            }
+        },
+        "isSubscriptionEmpty": {
+            "type": "Bool",
+            "metadata": {
+                "description": "A parameter indicating if the user has an empty subscription or a subscription with all the required resources."
+            }
+        },
+        "vnetName": {
+            "type": "String",
+            "metadata": {
+                "description": "Virtual network name. This will be present in the resource group provided by the parameter prerequisiteRG."
+            }
+        },
+        "subnetName": {
+            "type": "String",
+            "metadata": {
+                "description": "Subnet name. This will be present in the resource group provided by the parameter prerequisiteRG."
+            }
+        },
+        "vmNamePrefix": {
+            "type": "String",
+            "metadata": {
+                "description": "This prefix will be used in combination with the VM number to create the VM name. If using 'rdsh' as the prefix, VMs would be named 'rdsh-0', 'rdsh-1', etc. You should use a unique prefix to reduce name collisions in Active Directory."
+            }
+        },
+        "vmImageType": {
+            "defaultValue": "Gallery",
+            "allowedValues": [
+                "CustomImage",
+                "Gallery"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Select the image source for the session host vms. VMs from a Gallery image will be created with Managed Disks."
+            }
+        },
+        "vmGalleryImageOffer": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = Gallery) Gallery image Offer."
+            }
+        },
+        "vmGalleryImagePublisher": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = Gallery) Gallery image Publisher."
+            }
+        },
+        "vmGalleryImageSKU": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = Gallery) Gallery image SKU."
+            }
+        },
+        "vmGalleryImageVersion": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = Gallery) Gallery image version."
+            }
+        },
+        "vmCustomImageSourceId": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "(Required when vmImageType = CustomImage) Resource ID of the image"
+            }
+        },
+        "vmTemplate": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The necessary information for adding more VMs to this Hostpool"
+            }
+        },
+        "vmSize": {
+            "defaultValue": "Standard_D2s_V3",
+            "type": "String",
+            "metadata": {
+                "description": "The size of the session host VMs."
+            }
+        },
+        "vmNumberOfInstances": {
+            "type": "Int",
+            "metadata": {
+                "description": "Number of session hosts that will be created and added to the hostpool."
+            }
+        },
+        "hostpoolType": {
+            "allowedValues": [
+                "Personal",
+                "Pooled"
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Set this parameter to Personal if you would like to enable Persistent Desktop experience. Defaults to false."
+            }
+        },
+        "personalDesktopAssignmentType": {
+            "defaultValue": "",
+            "allowedValues": [
+                "Automatic",
+                "Direct",
+                ""
+            ],
+            "type": "String",
+            "metadata": {
+                "description": "Set the type of assignment for a Personal hostpool type"
+            }
+        },
+        "maxSessionLimit": {
+            "defaultValue": 16,
+            "type": "Int",
+            "metadata": {
+                "description": "Maximum number of sessions."
+            }
+        },
+        "domainControllerVMResourceGroup": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "The resource group of domain controller VM. This is required in case of existing setup with AD_DS option."
+            }
+        },
+        "domainControllerVMName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Domain controller VM name. This is required only when using AD_DS. This is used for running a Custom script extension to create Active Directory user, group."
+            }
+        },
+        "usersToAssign": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "An optional comma separated list of users to be given WVD role assignments.eg. user1,user2"
+            }
+        },
+        "customConfigurationTemplateUrl": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "ARM template that contains custom configurations to be run after the virtual machines are created."
+            }
+        },
+        "customConfigurationParameterUrl": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Url to the ARM template parameter file for the customConfigurationTemplateUrl parameter. This input will be used when the template is ran after the VMs have been deployed."
+            }
+        },
+        "deploymentId": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "GUID for the deployment"
+            }
+        },
+        "timestampInUtc": {
+            "defaultValue": "[utcNow()]",
+            "type": "String",
+            "metadata": {
+                "description": "Please leave this value as '[utcNow()]', as this is used to generate unique names in the deployment."
+            }
+        },
+        "ouPath": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "OUPath for the domain join"
+            }
+        },
+        "domain": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Domain to join"
+            }
+        },
+        "systemData": {
+            "defaultValue": {},
+            "type": "Object",
+            "metadata": {
+                "description": "System data is used for internal purposes, such as support preview features."
+            }
+        }
+    },
+    "variables": {
+        "azureAutomationAccount": "[concat('ebautomation', uniqueString(subscription().subscriptionId, parameters('deploymentRG')))]",
+        "wvdUserGroup": "AVDValidationUsers",
+        "domainName": "[if(equals(parameters('domain'), ''), last(split(parameters('domainAdminUPN'), '@')), parameters('domain'))]",
+        "deploymentResourcesTemplate": "[concat(parameters('easyButtonLinkedTemplateLocation'), 'DeploymentResourcesTemplate.json')]",
+        "prerequisiteResourceSetupTemplate": "[concat(parameters('easyButtonLinkedTemplateLocation'), 'PrerequisiteResourceSetupTemplate.json')]",
+        "addsUserCreationTemplate": "[concat(parameters('easyButtonLinkedTemplateLocation'), 'ADDSUserCreationTemplate.json')]",
+        "avdSetupTemplate": "[concat(parameters('easyButtonLinkedTemplateLocation'), 'AVDSetupTemplate.json')]",
+        "inputValidationJobTemplate": "[concat(parameters('easyButtonLinkedTemplateLocation'), 'InputValidationJobTemplate.json')]",
+        "prerequisiteJobTemplate": "[concat(parameters('easyButtonLinkedTemplateLocation'), 'PrerequisiteJobTemplate.json')]",
+        "PrerequisiteSetupCompletionJobTemplate": "[concat(parameters('easyButtonLinkedTemplateLocation'), 'PrerequisiteSetupCompletionJobTemplate.json')]",
+        "roleAssignmentJobTemplate": "[concat(parameters('easyButtonLinkedTemplateLocation'), 'RoleAssignmentJobTemplate.json')]",
+        "runbookScriptLocation": "[concat(parameters('_artifactsLocation'), 'EBRunbookScripts_2021-10-18/')]",
+        "newSubscriptionValidationScriptUri": "[concat(variables('runbookScriptLocation'), 'NewSubscriptionInputValidation.ps1')]",
+        "existingSubscriptionValidationScriptUri": "[concat(variables('runbookScriptLocation'), 'ExistingSubscriptionInputValidation.ps1')]",
+        "inputValidationScriptUri": "[if(parameters('isSubscriptionEmpty'), variables('newSubscriptionValidationScriptUri'), variables('existingSubscriptionValidationScriptUri'))]",
+        "requiredResourceSetupScriptUri": "[concat(variables('runbookScriptLocation'), 'SetupPrerequisiteResources.ps1')]",
+        "prerequisiteSetupCompletionScriptUri": "[concat(variables('runbookScriptLocation'), 'CompletePrerequisiteSetup.ps1')]",
+        "roleAssignmentScriptUri": "[concat(variables('runbookScriptLocation'), 'AssignRoles.ps1')]",
+        "inputValidationJobId": "[guid('rdsinfra-inputValidation', deployment().name, parameters('timestampInUTC'))]",
+        "prerequisiteResourceSetupJobId": "[guid('rdsinfra-resourcesetup', deployment().name, parameters('timestampInUtc'))]",
+        "prerequisiteSetupCompletionJobId": "[guid('rdsinfra-aaddssetup', deployment().name, parameters('timestampInUtc'))]",
+        "roleAssignmentJobId": "[guid('rdsinfra-roleassignment', deployment().name, parameters('timestampInUtc'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2020-10-01",
+            "name": "[parameters('deploymentRG')]",
+            "location": "[parameters('location')]"
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "name": "easy-button-deploymentResources-linked-template",
+            "dependsOn": [
+                "[parameters('deploymentRG')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('deploymentResourcesTemplate')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "azureAdminUPN": {
+                        "value": "[parameters('azureAdminUPN')]"
+                    },
+                    "azureAdminPassword": {
+                        "value": "[parameters('azureAdminPassword')]"
+                    },
+                    "identityApproach": {
+                        "value": "[parameters('identityApproach')]"
+                    },
+                    "domainAdminUPN": {
+                        "value": "[parameters('domainAdminUPN')]"
+                    },
+                    "domainAdminPassword": {
+                        "value": "[parameters('domainAdminPassword')]"
+                    },
+                    "validationUserName": {
+                        "value": "[parameters('validationUserName')]"
+                    },
+                    "validationUserPassword": {
+                        "value": "[parameters('validationUserPassword')]"
+                    },
+                    "isSubscriptionEmpty": {
+                        "value": "[parameters('isSubscriptionEmpty')]"
+                    },
+                    "vnetName": {
+                        "value": "[parameters('vnetName')]"
+                    },
+                    "subnetName": {
+                        "value": "[parameters('subnetName')]"
+                    },
+                    "prerequisiteRG": {
+                        "value": "[parameters('prerequisiteRG')]"
+                    },
+                    "wvdResourcesRG": {
+                        "value": "[parameters('wvdResourcesRG')]"
+                    },
+                    "azureAutomationAccount": {
+                        "value": "[variables('azureAutomationAccount')]"
+                    },
+                    "wvdUserGroup": {
+                        "value": "[variables('wvdUserGroup')]"
+                    },
+                    "azureCloudEnvironment": {
+                        "value": "[parameters('azureCloudEnvironment')]"
+                    },
+                    "usersToAssign": {
+                        "value": "[parameters('usersToAssign')]"
+                    },
+                    "hostpoolType": {
+                        "value": "[parameters('hostpoolType')]"
+                    },
+                    "domainName": {
+                        "value": "[variables('domainName')]"
+                    },
+                    "domainControllerVMResourceGroup": {
+                        "value": "[parameters('domainControllerVMResourceGroup')]"
+                    },
+                    "domainControllerVMName": {
+                        "value": "[parameters('domainControllerVMName')]"
+                    }
+                }
+            },
+            "resourceGroup": "[parameters('deploymentRG')]"
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "name": "easy-button-inputvalidation-job-linked-template",
+            "dependsOn": [
+                "easy-button-deploymentResources-linked-template"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('inputValidationJobTemplate')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "azureAutomationAccount": {
+                        "value": "[variables('azureAutomationAccount')]"
+                    },
+                    "inputValidationScriptUri": {
+                        "value": "[variables('inputValidationScriptUri')]"
+                    },
+                    "inputValidationJobId": {
+                        "value": "[variables('inputValidationJobId')]"
+                    }
+                }
+            },
+            "resourceGroup": "[parameters('deploymentRG')]"
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "name": "easy-button-prerequisite-job-linked-template",
+            "dependsOn": [
+                "easy-button-inputvalidation-job-linked-template"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('prerequisiteJobTemplate')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "azureAutomationAccount": {
+                        "value": "[variables('azureAutomationAccount')]"
+                    },
+                    "prerequisiteResourceSetupScriptUri": {
+                        "value": "[variables('requiredResourceSetupScriptUri')]"
+                    },
+                    "prerequisiteResourceSetupJobId": {
+                        "value": "[variables('prerequisiteResourceSetupJobId')]"
+                    }
+                }
+            },
+            "resourceGroup": "[parameters('deploymentRG')]"
+        },
+        {
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2020-10-01",
+            "name": "[parameters('prerequisiteRG')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "easy-button-prerequisite-job-linked-template"
+            ],
+            "condition": "[parameters('isSubscriptionEmpty')]"
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "name": "easy-button-prerequisite-resources-linked-template",
+            "dependsOn": [
+                "[parameters('prerequisiteRG')]",
+                "easy-button-prerequisite-job-linked-template"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('prerequisiteResourceSetupTemplate')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "isSubscriptionEmpty": {
+                        "value": "[parameters('isSubscriptionEmpty')]"
+                    },
+                    "domainName": {
+                        "value": "[variables('domainName')]"
+                    },
+                    "vnetName": {
+                        "value": "[parameters('vnetName')]"
+                    },
+                    "subnetName": {
+                        "value": "[parameters('subnetName')]"
+                    }
+                }
+            },
+            "resourceGroup": "[parameters('prerequisiteRG')]",
+            "condition": "[parameters('isSubscriptionEmpty')]"
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "name": "easy-button-prerequisite-user-setup-linked-template",
+            "dependsOn": [
+                "easy-button-prerequisite-job-linked-template"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('addsUserCreationTemplate')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "_artifactsLocation": {
+                        "value": "[parameters('_artifactsLocation')]"
+                    },
+                    "domainControllerVMName": {
+                        "value": "[parameters('domainControllerVMName')]"
+                    },
+                    "domainAdminUPN": {
+                        "value": "[parameters('domainAdminUPN')]"
+                    },
+                    "domainAdminPassword": {
+                        "value": "[parameters('domainAdminPassword')]"
+                    },
+                    "validationUserName": {
+                        "value": "[parameters('validationUserName')]"
+                    },
+                    "validationUserPassword": {
+                        "value": "[parameters('validationUserPassword')]"
+                    },
+                    "wvdUserGroup": {
+                        "value": "[variables('wvdUserGroup')]"
+                    },
+                    "usersToAssign": {
+                        "value": "[parameters('usersToAssign')]"
+                    },
+                    "ouPath": {
+                        "value": "[parameters('ouPath')]"
+                    }
+                }
+            },
+            "resourceGroup": "[parameters('domainControllerVMResourceGroup')]",
+            "condition": "[and(not(parameters('isSubscriptionEmpty')), equals(parameters('identityApproach'), 'AD_DS'))]"
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "name": "easy-button-prerequisitecompletion-job-linked-template",
+            "dependsOn": [
+                "easy-button-prerequisite-resources-linked-template",
+                "easy-button-prerequisite-user-setup-linked-template"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('PrerequisiteSetupCompletionJobTemplate')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "azureAutomationAccount": {
+                        "value": "[variables('azureAutomationAccount')]"
+                    },
+                    "prerequisiteSetupCompletionScriptUri": {
+                        "value": "[variables('prerequisiteSetupCompletionScriptUri')]"
+                    },
+                    "prerequisiteSetupCompletionJobId": {
+                        "value": "[variables('prerequisiteSetupCompletionJobId')]"
+                    }
+                }
+            },
+            "resourceGroup": "[parameters('deploymentRG')]",
+            "condition": "[or(parameters('isSubscriptionEmpty'), equals(parameters('identityApproach'), 'AD_DS'))]"
+        },
+        {
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2020-10-01",
+            "name": "[parameters('wvdResourcesRG')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "easy-button-prerequisite-job-linked-template",
+                "easy-button-prerequisitecompletion-job-linked-template"
+            ]
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "name": "easy-button-avdsetup-linked-template",
+            "dependsOn": [
+                "[parameters('wvdResourcesRG')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('avdSetupTemplate')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "_artifactsLocation": {
+                        "value": "[parameters('_artifactsLocation')]"
+                    },
+                    "createHostpoolTemplateLocation": {
+                        "value": "[parameters('createHostpoolTemplateLocation')]"
+                    },
+                    "createHostpoolNestedTemplatesLocation": {
+                        "value": "[parameters('createHostpoolNestedTemplatesLocation')]"
+                    },
+                    "azureCloudEnvironment": {
+                        "value": "[parameters('azureCloudEnvironment')]"
+                    },
+                    "identityApproach": {
+                        "value": "[parameters('identityApproach')]"
+                    },
+                    "azureAdminUPN": {
+                        "value": "[parameters('azureAdminUPN')]"
+                    },
+                    "azureAdminPassword": {
+                        "value": "[parameters('azureAdminPassword')]"
+                    },
+                    "domainAdminUsername": {
+                        "value": "[parameters('domainAdminUPN')]"
+                    },
+                    "domainAdminPassword": {
+                        "value": "[parameters('domainAdminPassword')]"
+                    },
+                    "vmNamePrefix": {
+                        "value": "[parameters('vmNamePrefix')]"
+                    },
+                    "vmImageType": {
+                        "value": "[parameters('vmImageType')]"
+                    },
+                    "vmGalleryImageOffer": {
+                        "value": "[parameters('vmGalleryImageOffer')]"
+                    },
+                    "vmGalleryImagePublisher": {
+                        "value": "[parameters('vmGalleryImagePublisher')]"
+                    },
+                    "vmGalleryImageSKU": {
+                        "value": "[parameters('vmGalleryImageSKU')]"
+                    },
+                    "vmGalleryImageVersion": {
+                        "value": "[parameters('vmGalleryImageVersion')]"
+                    },
+                    "vmCustomImageSourceId": {
+                        "value": "[parameters('vmCustomImageSourceId')]"
+                    },
+                    "vmTemplate": {
+                        "value": "[parameters('vmTemplate')]"
+                    },
+                    "vmSize": {
+                        "value": "[parameters('vmSize')]"
+                    },
+                    "vmNumberOfInstances": {
+                        "value": "[parameters('vmNumberOfInstances')]"
+                    },
+                    "vnetName": {
+                        "value": "[parameters('vnetName')]"
+                    },
+                    "ouPath": {
+                        "value": "[parameters('ouPath')]"
+                    },
+                    "domain": {
+                        "value": "[parameters('domain')]"
+                    },
+                    "subnetName": {
+                        "value": "[parameters('subnetName')]"
+                    },
+                    "vnetRG": {
+                        "value": "[parameters('prerequisiteRG')]"
+                    },
+                    "hostpoolType": {
+                        "value": "[parameters('hostpoolType')]"
+                    },
+                    "personalDesktopAssignmentType": {
+                        "value": "[parameters('personalDesktopAssignmentType')]"
+                    },
+                    "maxSessionLimit": {
+                        "value": "[parameters('maxSessionLimit')]"
+                    },
+                    "wvdUserGroup": {
+                        "value": "[variables('wvdUserGroup')]"
+                    },
+                    "customConfigurationTemplateUrl": {
+                        "value": "[parameters('customConfigurationTemplateUrl')]"
+                    },
+                    "customConfigurationParameterUrl": {
+                        "value": "[parameters('customConfigurationParameterUrl')]"
+                    },
+                    "systemData": {
+                        "value": "[parameters('systemData')]"
+                    }
+                }
+            },
+            "resourceGroup": "[parameters('wvdResourcesRG')]"
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-06-01",
+            "name": "easy-button-roleassignment-job-linked-template",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('roleAssignmentJobTemplate')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "azureAutomationAccount": {
+                        "value": "[variables('azureAutomationAccount')]"
+                    },
+                    "roleAssignmentScriptUri": {
+                        "value": "[variables('roleAssignmentScriptUri')]"
+                    },
+                    "roleAssignmentJobId": {
+                        "value": "[variables('roleAssignmentJobId')]"
+                    },
+                    "profileStorageAccountName": {
+                        "value": "[reference('easy-button-avdsetup-linked-template').outputs.profileStorageAccountName.value]"
+                    },
+                    "fileShareName": {
+                        "value": "[reference('easy-button-avdsetup-linked-template').outputs.fileShareName.value]"
+                    },
+                    "desktopAppGroupName": {
+                        "value": "[reference('easy-button-avdsetup-linked-template').outputs.desktopAppGroupName.value]"
+                    }
+                }
+            },
+            "resourceGroup": "[parameters('deploymentRG')]"
+        }
+    ]
+}
